@@ -16,11 +16,6 @@ from collections import deque
 import pandas as pd
 # Correct
 from streamlit_autorefresh import st_autorefresh
-from transformers import ViTForImageClassification, ViTImageProcessor
-import torch
-# silently preload
-ViTForImageClassification.from_pretrained("yst007/vit-emotion")
-ViTImageProcessor.from_pretrained("yst007/vit-emotion")
 
 
 #  Streamlit page config 
@@ -598,4 +593,5 @@ if get_book_recs:
                 show_books_list(books)
     else:
         st.warning("Start the camera first, then click the button.")
+
 
