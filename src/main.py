@@ -19,7 +19,7 @@ from streamlit_autorefresh import st_autorefresh
 
 
 #  Streamlit page config 
-st.set_page_config(page_title="Face + Emotion Detection", layout="centered")
+st.set_page_config(page_title="Face + Emotion Detection", layout="wide")
 st.title(" Real-Time Emotion Detection")
 
 #  Face Cascade loader 
@@ -352,104 +352,123 @@ class FaceProcessor(VideoProcessorBase):
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
 # UI + WebRTC 
-col1, col2 = st.columns(2)
-with col1:
+# Create main layout: left side for detector, right side for recommendations
+main_col, recommendation_col = st.columns([3, 1])
+
+with main_col:
     st.write("Click **Start** below to allow camera access.")
 
 os.makedirs("outputs", exist_ok=True)
 
-rtc_configuration = {
-    "iceServers": [
-        {"urls": ["stun:stun.l.google.com:19302"]},
-        {
-            "urls": ["turn:35.244.33.238:3478"],
-            "username": "appuser",
-            "credential": "strongpassword123"
-        }
-    ]
-}
+with main_col:
+    rtc_configuration = {
+        "iceServers": [
+            {"urls": ["stun:stun.l.google.com:19302"]},
+            {
+                "urls": ["turn:35.244.33.238:3478"],
+                "username": "appuser",
+                "credential": "strongpassword123"
+            }
+        ]
+    }
 
-ctx = webrtc_streamer(
-    key="face-emotion",
-    mode=WebRtcMode.SENDRECV,
-    rtc_configuration=rtc_configuration,
-    video_processor_factory=FaceProcessor,
-    media_stream_constraints={"video": True, "audio": False},
-)
+    ctx = webrtc_streamer(
+        key="face-emotion",
+        mode=WebRtcMode.SENDRECV,
+        rtc_configuration=rtc_configuration,
+        video_processor_factory=FaceProcessor,
+        media_stream_constraints={"video": True, "audio": False},
+        video_html_attrs={
+        "style": {
+            "width" : "100%",
+            "height": "auto",
+            "maxHeight": "90vh", 
+            "margin": "0 auto",
+        },
+        "controls": True,
+        "autoPlay": True,
+    },
+    )
 
+    st.markdown("###  Live Emotion Feed")
+    st.toggle("Show live graph", key="show_graph", value=False)
 
+# Recommendations in the right column
+with recommendation_col:
+    st.subheader(" Mood-Based Movie Picks")
+    rec_mode = st.radio("Movie Style", ["match", "lift"], index=0, horizontal=True)
+    get_recs = st.button("Get Movie Recommendations")
+    
+    st.subheader(" Mood-Based Book Picks")
+    book_mode = st.radio("Book style", ["match", "lift"], index=0, horizontal=True)
+    get_book_recs = st.button("Get Book Recommendations")
 
+# Configuration Block - keep in main column context
+with main_col:
+    if ctx and ctx.video_processor:
+        # Get the running processor instance
+        processor = ctx.video_processor
+        emo_labels = st.session_state.get("emo_classes", ["Angry", "Disgust", "Fear", "Happy", "Sad", "Surprise", "Neutral"])
 
-st.markdown("###  Live Emotion Feed")
-
-# NEW: Add the toggle and title inside the chart column
-st.toggle("Show live graph", key="show_graph", value=False)
-
-# Configuration Block 
-if ctx and ctx.video_processor:
-    # Get the running processor instance
-    processor = ctx.video_processor
-    emo_labels = st.session_state.get("emo_classes", ["Angry", "Disgust", "Fear", "Happy", "Sad", "Surprise", "Neutral"])
-
-    # Start a live updating chart in the right column
-    # st.markdown("###  Real-Time Emotion Graph")
-    # chart_placeholder = st.empty()
-
-
-
-    # Tell the processor which detector to use
-    processor.active_detector = detector_choice
-
-    # Update its parameters based on the UI
-    if detector_choice == "Haarcascade":
-        processor.scale_factor = scale_factor
-        processor.min_neighbors = min_neighbors
-        processor.min_size_px = min_size_px
-    else: # YuNet
-        # Update the parameters on the processor's YuNet instance
-        processor.yunet_detector.detector.setScoreThreshold(score_threshold)
-        processor.yunet_detector.detector.setNMSThreshold(nms_threshold)
-        processor.yunet_detector.detector.setTopK(top_k)
-
-    # Update common settings
-    processor.target_width = target_width
-    processor.show_fps = show_fps
+        # Start a live updating chart in the right column
+        # st.markdown("###  Real-Time Emotion Graph")
+        # chart_placeholder = st.empty()
 
 
 
+        # Tell the processor which detector to use
+        processor.active_detector = detector_choice
 
-    # if selected_model_name:
-    #  model_path = os.path.join(models_dir, selected_model_name)
-    if model_type_choice == "CNN" and selected_local_model:
-        model_source = os.path.join(models_dir, selected_local_model)
-    elif model_type_choice == "ViT (Hugging Face)" and selected_hf_model:
-        model_source = selected_hf_model
-    else:
-        raise ValueError("No model selected!")
-    try:
-        # Load either CNN (.h5/.keras) or ViT (.pth)
-        model_type, model_obj, inp_hw_c = load_emotion_model(model_source)
+        # Update its parameters based on the UI
+        if detector_choice == "Haarcascade":
+            processor.scale_factor = scale_factor
+            processor.min_neighbors = min_neighbors
+            processor.min_size_px = min_size_px
+        else: # YuNet
+            # Update the parameters on the processor's YuNet instance
+            processor.yunet_detector.detector.setScoreThreshold(score_threshold)
+            processor.yunet_detector.detector.setNMSThreshold(nms_threshold)
+            processor.yunet_detector.detector.setTopK(top_k)
 
-        # Send the model to the processor
-        ctx.video_processor.emotion_model = model_obj
-        ctx.video_processor.model_type = model_type
-        ctx.video_processor.inp_size = inp_hw_c
+        # Update common settings
+        processor.target_width = target_width
+        processor.show_fps = show_fps
 
-        # Common emotion settings
-        ctx.video_processor.set_emotion_model(
-            model_obj,
-            inp_hw_c,
-            st.session_state["emo_classes"],
-            st.session_state["conf_threshold"],
-            st.session_state["predict_every_n"],
-        )
 
-        st.success(
-            f"Loaded {model_type.upper()} model: {model_source} "
-        )
 
-    except Exception as e:
-        st.error(f"Failed to load {model_source}: {e}")
+
+        # if selected_model_name:
+        #  model_path = os.path.join(models_dir, selected_model_name)
+        if model_type_choice == "CNN" and selected_local_model:
+            model_source = os.path.join(models_dir, selected_local_model)
+        elif model_type_choice == "ViT (Hugging Face)" and selected_hf_model:
+            model_source = selected_hf_model
+        else:
+            raise ValueError("No model selected!")
+        try:
+            # Load either CNN (.h5/.keras) or ViT (.pth)
+            model_type, model_obj, inp_hw_c = load_emotion_model(model_source)
+
+            # Send the model to the processor
+            ctx.video_processor.emotion_model = model_obj
+            ctx.video_processor.model_type = model_type
+            ctx.video_processor.inp_size = inp_hw_c
+
+            # Common emotion settings
+            ctx.video_processor.set_emotion_model(
+                model_obj,
+                inp_hw_c,
+                st.session_state["emo_classes"],
+                st.session_state["conf_threshold"],
+                st.session_state["predict_every_n"],
+            )
+
+            st.success(
+                f"Loaded {model_type.upper()} model: {model_source} "
+            )
+
+        except Exception as e:
+            st.error(f"Failed to load {model_source}: {e}")
         
         # Create an infinite loop to update the chart
     # NEW: Check if the 'show_graph' toggle is on
@@ -477,68 +496,35 @@ if ctx and ctx.video_processor:
 
 
 
-    if st.session_state.get("show_graph", False):
-        
-        st_autorefresh(interval=1000, key="graph_refresh")
+        if st.session_state.get("show_graph", False):
+            
+            st_autorefresh(interval=1000, key="graph_refresh")
 
-        if processor.emotion_history:
-            # Get last few seconds of predictions
-            probs = list(processor.emotion_history)
-            times = list(processor.time_history)
+            if processor.emotion_history:
+                # Get last few seconds of predictions
+                probs = list(processor.emotion_history)
+                times = list(processor.time_history)
 
-            # Convert to pandas DataFrame
-            df = pd.DataFrame(probs, columns=emo_labels)
-            df["Time"] = pd.to_datetime(times, unit="s")
-            df = df.set_index("Time")
+                # Convert to pandas DataFrame
+                df = pd.DataFrame(probs, columns=emo_labels)
+                df["Time"] = pd.to_datetime(times, unit="s")
+                df = df.set_index("Time")
 
-            # Plot line chart DIRECTLY into the column
-            st.line_chart(df) 
-        
-        # (Optional but good) Show a message if graph is on but no data yet
-        else:
-            st.write("Waiting for emotion data...")
+                # Plot line chart DIRECTLY into the column
+                st.line_chart(df) 
+            
+            # (Optional but good) Show a message if graph is on but no data yet
+            else:
+                st.write("Waiting for emotion data...")
 
-# The 'while True:' loop is now gone.
-# The script will continue to the recommendation code below.
+        # The 'while True:' loop is now gone.
+        # The script will continue to the recommendation code below.
 
-else:
-    st.info("Press **Start** to begin streaming.")
-
-
+    else:
+        st.info("Press **Start** to begin streaming.")
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#  Movie + Book Recommendationss
-col1, col2 = st.columns(2)
-
-with col1:
- st.subheader(" Mood-Based Movie Picks")
- rec_mode = st.radio("Movie Style", ["match", "lift"], index=0,horizontal=True)
- get_recs = st.button("Get Movie Recommendations")  
-
-with col2:
- st.subheader(" Mood-Based Book Picks")
- book_mode = st.radio("Book style", ["match", "lift"], index=0, horizontal=True)
- get_book_recs = st.button("Get Book Recommendations")
-
-
-
+# Handle Movie Recommendations
 if get_recs:
     if ctx and ctx.video_processor:
         probs = ctx.video_processor.last_probs
@@ -567,9 +553,7 @@ if get_recs:
     else:
         st.warning("Start the camera first, then click the button.")
 
-
-
-
+# Handle Book Recommendations
 if get_book_recs:
     if ctx and ctx.video_processor:
         probs = ctx.video_processor.last_probs
