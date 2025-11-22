@@ -182,6 +182,7 @@ def show_movies(movies: List[dict], img_base: str = "https://image.tmdb.org/t/p/
         background: linear-gradient(to right, #007bff40, #007bff90, #007bff40);
         margin-bottom: 20px;
         border-radius: 2px;
+    
     }
 
     .movie-list {
@@ -190,6 +191,7 @@ def show_movies(movies: List[dict], img_base: str = "https://image.tmdb.org/t/p/
         gap: 25px;
         padding: 10px;
         width: 100%;
+        margin: 0 auto;
     }
 
     .movie-card {
@@ -201,6 +203,8 @@ def show_movies(movies: List[dict], img_base: str = "https://image.tmdb.org/t/p/
         overflow: hidden;
         transition: transform 0.25s ease, box-shadow 0.25s ease;
         width: 100%;
+        padding: 30px;
+        margin-bottom: 25px;
     }
 
     .movie-card:hover {
