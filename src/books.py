@@ -189,6 +189,7 @@ def show_books(books: List[dict]):
         overflow: hidden;
         transition: transform 0.25s ease, box-shadow 0.25s ease;
         width: 100%;
+         margin-bottom: 25px;
     }
 
     .book-card:hover {
